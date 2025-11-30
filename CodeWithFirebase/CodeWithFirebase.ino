@@ -265,7 +265,7 @@ void SpeedControlTask(void* pvPara) {
 /*-------------RFID Tag Reader Task-------------*/
 TaskHandle_t RFIDTagReaderTaskHandle = NULL;
 StaticTask_t xRFIDTagReaderTCB;
-String currenttagUID = "";
+extern String currenttagUID = "";
 void RFIDTagReaderTask(void* pvPara) {
   while (true) {
     // If no new card or read failed, wait and continue
@@ -275,6 +275,7 @@ void RFIDTagReaderTask(void* pvPara) {
     }
 
     currenttagUID = RFIDReader::GetTagUID();
+    
 
     // Debug - print the current RFID tag
     Serial.print("RFID Tag: ");
@@ -483,5 +484,11 @@ void loop() {
   // }
   // Serial.println();
 
+  /*------------------------scan RFID turn to Tile----------------------------------------------------*/
 
+  auto tileID = scanRFIDtoTILE(currenttagUID);
+
+  /*------------------------DEBUG:scan RFID turn to Tile----------------------------------------------------*/
+  // Serial.print(" This tagis in tile ");
+  // Serial.print(tileID);
 }

@@ -224,6 +224,20 @@ RFIDTile rfidGrid[GRID_ROWS][GRID_COLS] = {
 };
 
 
-void RFIDtoTILE () {
+int scanRFIDtoTILE(const String &currentUID) {
+  // 遍历整个 5x5 的 tile 网格
+  for (int r = 0; r < GRID_ROWS; r++) {
+    for (int c = 0; c < GRID_COLS; c++) {
+      // 遍历这个 tile 的 9 个 RFID
+      for (int i = 0; i < 9; i++) {
+        if (currentUID == rfidGrid[r][c].rfid[i]) {
+          // 找到了，返回这个 tile 的 id
+          return rfidGrid[r][c].tileId;
+        }
+      }
+    }
+  }
 
+  // 没有匹配到，返回一个无效值，比如 -1
+  return -1;
 }

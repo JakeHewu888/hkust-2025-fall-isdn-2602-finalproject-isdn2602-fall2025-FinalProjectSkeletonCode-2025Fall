@@ -15,4 +15,6 @@ struct RFIDTile {
   int col;
 };
 
+int scanRFIDtoTILE(const String &currentUID);
+
 #endif
