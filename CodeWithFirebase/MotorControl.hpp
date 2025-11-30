@@ -25,9 +25,9 @@ namespace MotorControl {
   struct ServoMotor
   {
     const uint8_t PWMFrequency = 50; // PWM must be in 50Hz
-    const uint8_t PWMResolution = 12;
+    const uint8_t PWMResolution = 10;
     uint16_t PWMDuty = 0;
-    const uint8_t PWMChannel = 8; // Ideally select between 5-10
+    const uint8_t PWMChannel = 6; // Ideally select between 5-10
     float TargetAngle = 0.0f;
   };
 

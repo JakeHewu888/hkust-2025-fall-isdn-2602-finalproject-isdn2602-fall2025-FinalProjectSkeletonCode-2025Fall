@@ -16,9 +16,11 @@
 #include "Pinout.hpp"
 #include "RFIDReader.hpp"
 #include "UltrasonicSensor.hpp"
-#include "config.hpp"  // For Firebase and WiFi config
-#include "pitches.h"   //For Buzzer
-#include "wifi_manager.hpp"
+#include "config.h"   // For Firebase and WiFi config
+#include "pitches.h"  //For Buzzer
+#include "wifi_manager.h"
+#include "dijkstra.hpp"
+#include "RFIDmap.hpp"
 
 /*==================================================================================
  * Firebase Related
@@ -125,13 +127,13 @@ void processData(AsyncResult& aResult) {
       examState.task_id = obj["task_id"].as<int>();
       examState.time_remain = obj["time_remain"].as<int>();
       //  Debug - print the current exam state
-      //   Serial.println("===== Exam State =====");
-      //   Serial.println("Activated: " + String(examState.activated));
-      //   Serial.println("Start Point: " + String(examState.start_point));
-      //   Serial.println("End Point: " + String(examState.end_point));
-      //   Serial.println("Field: " + examState.field);
-      //   Serial.println("Task ID: " + String(examState.task_id));
-      //   Serial.println("Time Remain: " + String(examState.time_remain));
+      // Serial.println("===== Exam State =====");
+      // Serial.println("Activated: " + String(examState.activated));
+      // Serial.println("Start Point: " + String(examState.start_point));
+      // Serial.println("End Point: " + String(examState.end_point));
+      // Serial.println("Field: " + examState.field);
+      // Serial.println("Task ID: " + String(examState.task_id));
+      // Serial.println("Time Remain: " + String(examState.time_remain));
     }
     if (aResult.uid() == "RTDB_GetTrafficLight") {
       JsonArray arr = doc.as<JsonArray>();
@@ -173,6 +175,8 @@ struct PID_t {
   volatile float Kp;
   volatile float Ki;
   volatile float Kd;
+  volatile float max_integral = 3000.0f;
+  volatile float min_integral = 0.0f;
 
   volatile float target_val;  // The target RPM
   float actual_val;           // Actual RPM Reading
@@ -186,9 +190,19 @@ struct PID_t {
 
     this->integral += this->err;
 
+    // Limit -> in case too high accumulation
+    if (integral > max_integral)
+      integral = max_integral;
+    if (integral < min_integral)
+      integral = min_integral;
+
     this->actual_val = this->Kp * this->err + this->Ki * this->integral + this->Kd * (this->err - this->err_last);
 
     this->err_last = this->err;
+
+    if (this->actual_val < 0) {
+      this->actual_val = 0 - this->actual_val;
+    }
 
     return this->actual_val;
   }
@@ -208,19 +222,19 @@ void SpeedControlTask(void* pvPara) {
 
   /*Initialize PID Parameters*/
   /*LeftMotor PID*/
-  LeftWheelPID.Kp = 0.0f;
-  LeftWheelPID.Ki = 0.0f;
+  LeftWheelPID.Kp = 3.0f;
+  LeftWheelPID.Ki = 0.7f;
   LeftWheelPID.Kd = 0.0f;
-  LeftWheelPID.target_val = 150.0f;
+  LeftWheelPID.target_val = 200.0f;
   LeftWheelPID.err = 0.0f;
   LeftWheelPID.err_last = 0.0f;
   LeftWheelPID.integral = 0.0f;
 
   /*RightMotor PID*/
-  RightWheelPID.Kp = 0.0f;
-  RightWheelPID.Ki = 0.0f;
+  RightWheelPID.Kp = 3.0f;
+  RightWheelPID.Ki = 0.7f;
   RightWheelPID.Kd = 0.0f;
-  RightWheelPID.target_val = 150.0f;
+  RightWheelPID.target_val = 200.0f;
   RightWheelPID.err = 0.0f;
   RightWheelPID.err_last = 0.0f;
   RightWheelPID.integral = 0.0f;
@@ -237,16 +251,39 @@ void SpeedControlTask(void* pvPara) {
       RightWheelPID.PID_realize(RightWheelRPM.rpm);
     /*----------------------------------------------------*/
     /*FOR DEBUG USAGE*/
-    Serial.print("Speed Left: ");
-    Serial.println(MotorControl::LeftWheel.Speed);
+    // Serial.print("Speed Left: ");
+    // Serial.println(MotorControl::LeftWheel.Speed);
 
-    Serial.print("Speed Right: ");
-    Serial.println(MotorControl::RightWheel.Speed);
+    // Serial.print("Speed Right: ");
+    // Serial.println(MotorControl::RightWheel.Speed);
     /*----------------------------------------------------*/
     /*A delay must be added inside each User Task*/
     vTaskDelay(50);
   }
 }
+
+/*-------------RFID Tag Reader Task-------------*/
+TaskHandle_t RFIDTagReaderTaskHandle = NULL;
+StaticTask_t xRFIDTagReaderTCB;
+String currenttagUID = "";
+void RFIDTagReaderTask(void* pvPara) {
+  while (true) {
+    // If no new card or read failed, wait and continue
+    if (!RFIDReader::mfrc522.PICC_IsNewCardPresent() || !RFIDReader::mfrc522.PICC_ReadCardSerial()) {
+      vTaskDelay(pdMS_TO_TICKS(50));
+      continue;
+    }
+
+    currenttagUID = RFIDReader::GetTagUID();
+
+    // Debug - print the current RFID tag
+    Serial.print("RFID Tag: ");
+    Serial.println(currenttagUID);
+
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+  }
+}
+
 
 /*Creating User Task in FreeRTOS*/
 /*-------------LED Blinking Task-------------*/
@@ -283,60 +320,59 @@ void MovementTask(void* pvPara) {
     // Using switch case for the movement control
     switch (IRSensors::IRData.state) {
       case IRSensors::Middle_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
+        LeftWheelPID.target_val = 110.0f;
+        RightWheelPID.target_val = 110.0f;
         Movement::MoveForward();
-        vTaskDelay(100);
+        vTaskDelay(20);
         break;
 
       case IRSensors::Left_Middle_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
+        LeftWheelPID.target_val = 0.0f;
+        RightWheelPID.target_val = 350.0f;
         Movement::RotateLeft();
-        vTaskDelay(100);
+        vTaskDelay(400);
         break;
 
       case IRSensors::ALL_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
+        LeftWheelPID.target_val = 0.0f;
+        RightWheelPID.target_val = 0.0f;
         Movement::Stop();
-        vTaskDelay(100);
+        vTaskDelay(50);
         break;
 
       case IRSensors::Left_Right_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
+        LeftWheelPID.target_val = 0.0f;
+        RightWheelPID.target_val = 0.0f;
         Movement::Stop();
-        vTaskDelay(100);
+        vTaskDelay(50);
         break;
 
       case IRSensors::Middle_Right_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
+        LeftWheelPID.target_val = 350.0f;
+        RightWheelPID.target_val = 0.0f;
         Movement::RotateRight();
-        vTaskDelay(100);
+        vTaskDelay(400);
         break;
 
       case IRSensors::Right_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
-        Movement::RotateRight();
-        vTaskDelay(100);
+        LeftWheelPID.target_val = 110.0f;
+        RightWheelPID.target_val = 110.0f;
+        Movement::FixRight();
+        vTaskDelay(20);
         break;
 
       case IRSensors::Left_ON_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
-        Movement::RotateLeft();
-        vTaskDelay(100);
+        LeftWheelPID.target_val = 110.0f;
+        RightWheelPID.target_val = 110.0f;
+        Movement::FixLeft();
+        vTaskDelay(20);
         break;
 
       case IRSensors::All_OFF_Track:
-        LeftWheelPID.target_val = 150.0f;
-        RightWheelPID.target_val = 150.0f;
-        Movement::Stop();
-        vTaskDelay(100);
-        break;
+        LeftWheelPID.target_val = 110.0f;
+        RightWheelPID.target_val = 110.0f;
+        Movement::MoveForward();
+        vTaskDelay(20);
     }
     // /*-------For Debug Use------*/
     // Serial.print("LeftWheel.Speed: ");
@@ -357,26 +393,6 @@ void MovementTask(void* pvPara) {
   }
 };
 
-/*-------------RFID Tag Reader Task-------------*/
-TaskHandle_t RFIDTagReaderTaskHandle = NULL;
-StaticTask_t xRFIDTagReaderTCB;
-void RFIDTagReaderTask(void* pvPara) {
-  while (true) {
-    // If no new card or read failed, wait and continue
-    if (!RFIDReader::mfrc522.PICC_IsNewCardPresent() || !RFIDReader::mfrc522.PICC_ReadCardSerial()) {
-      vTaskDelay(pdMS_TO_TICKS(50));
-      continue;
-    }
-
-    String currenttagUID = RFIDReader::GetTagUID();
-
-    // Debug - print the current RFID tag
-    // Serial.print("RFID Tag: ");
-    // Serial.println(currenttagUID);
-
-    vTaskDelay(pdMS_TO_TICKS(10));
-  }
-}
 
 void setup() {
   // Initialize Serial communication
@@ -448,4 +464,24 @@ void setup() {
   vTaskDelay(10);
 }
 
-void loop() {}
+void loop() {
+  /*---------------------------------Dijkstra_function----------------------------------------------------*/
+  auto result = dijkstra(examState.start_point, examState.end_point);
+  std::vector<int> path = result.first;
+  int cost = result.second;
+
+  /*------------------------DEBUG:Dijkstra_function----------------------------------------------------*/
+  // Serial.print("Cost: ");
+  // Serial.println(cost);
+
+  // Serial.print("Path: ");
+  // for (size_t i = 0; i < path.size(); i++) {
+  //   Serial.print(path[i]);
+  //   if (i < path.size() - 1) {
+  //     Serial.print(" -> ");
+  //   }
+  // }
+  // Serial.println();
+
+
+}

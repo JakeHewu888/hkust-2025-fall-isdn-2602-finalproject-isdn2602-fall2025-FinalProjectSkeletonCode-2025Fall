@@ -15,7 +15,7 @@ const String API_KEY = "AIzaSyAIfJ94DJqUXPEyM4N4dy_2bfSdFOatns0";
 const String DATABASE_URL =
     "https://isdn2602-control-panel-2025-default-rtdb.firebaseio.com/";
 // TODO
-const String UID = "your-uid";  // you can find it from the
+const String UID = "DnvodcVlRHdMfMtDVNhy6UzFiLQ2";  // you can find it from the
                                 // control panel site
 
 // LED Pin

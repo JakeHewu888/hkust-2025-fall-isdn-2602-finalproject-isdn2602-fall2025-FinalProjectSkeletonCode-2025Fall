@@ -15,9 +15,11 @@ namespace Movement {
              \ | /
               \|/ 
        0 ------------- 180        */
-    const uint8_t servoLeft   = 45;
-    const uint8_t servoCenter = 90;
-    const uint8_t servoRight  = 135;
+    const uint8_t servoLeft   = 49.8;
+    const uint8_t servoMiniLeft = 64.8;
+    const uint8_t servoCenter = 94.8;
+    const uint8_t servoRight  = 149.8;
+    const uint8_t servoMiniRight = 119.8;
 
     // Global motor instances
     // extern DCMotor LeftWheel;
@@ -29,6 +31,8 @@ namespace Movement {
     void RotateRight();
     void MoveForward();
     void MoveBackward();
+    void FixLeft();
+    void FixRight();
     void Stop();
 }
 

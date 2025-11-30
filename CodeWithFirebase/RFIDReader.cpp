@@ -6,6 +6,7 @@ void RFIDReader::Init() {
   // Initialize RFID
   Wire.begin(Pinout::RFID_SDA, Pinout::RFID_SCL);
   mfrc522.PCD_Init();
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
   Serial.println("RFID Initialized");
 }
 

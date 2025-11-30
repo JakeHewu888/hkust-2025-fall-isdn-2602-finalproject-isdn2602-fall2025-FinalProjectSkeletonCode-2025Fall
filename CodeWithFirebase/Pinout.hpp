@@ -17,8 +17,8 @@ namespace Pinout {
     const uint8_t IRRight = 5;
 
     // Ultrasonic Sensor 
-    const uint8_t UltrasonicTrigPin = 6;
-    const uint8_t UltrasonicEchoPin = 4;
+    const uint8_t UltrasonicTrigPin = 39;
+    const uint8_t UltrasonicEchoPin = 38;
     // Left Motor (LM)
     const uint8_t LeftMotorIn1 = 12;
     const uint8_t LeftMotorIn2 = 11;
